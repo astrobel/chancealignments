@@ -1,10 +1,10 @@
 # rgredux
 
---> An automated pipeline for close examination of Kepler light curves and target pixel files <--
+- --> An automated pipeline for close examination of Kepler light curves and target pixel files <--
 
---> Isabel C., 2016 <--
+- --> Isabel C., 2016 <--
 
---> github.com/astrobel <--
+- --> github.com/astrobel <--
 
 
 Features:
