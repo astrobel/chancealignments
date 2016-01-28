@@ -1,5 +1,5 @@
 --> An automated pipeline for close examination of Kepler light curves and target pixel files <--
---> Isabel Colman, 2016 <--
+--> Isabel C., 2016 <--
 --> github.com/astrobel <--
 
 Features:
