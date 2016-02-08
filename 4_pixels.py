@@ -100,7 +100,6 @@ if stitch == "y":
          ytest = parameters['NAXIS2']
          if (q % 4) == grouping and q != repquarter and q != 1 and xtest == x and ytest == y:
             stitchcounter += 1
-            print 'yeehaw'
             exec("hdulist = pyfits.open('%s')" % i)
             parameters = hdulist[0].header
             hd = hdulist[1].header
