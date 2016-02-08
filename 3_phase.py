@@ -37,50 +37,65 @@ exec("importblend = np.loadtxt('kic%d_lc.dat')" % kic)
 clipped_time = importblend[:,0]
 clipped_flux = importblend[:,1]
 
-# second, more intense fourier transform
 print ' '
-print '--> Fourier transform for phase curve <--'
-print ' '
-while True:
-   try:
-      ofac = int(raw_input('--> Oversampling factor: '))
-      break
-   except ValueError:
-      print '--> Please enter an integer'
-while True:
-   try:
-      hifac = float(raw_input('--> Nyquist range factor: '))
-      break
-   except ValueError:
-      print '--> Please enter a float'
-while True:
-   try:
-      topfreq = float(raw_input('--> Highest frequency to plot in microHertz: '))
-      break
-   except ValueError:
-      print '--> Please enter a float'
-print ' '
-print ' '
-frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
-hifac = topfreq / max(frequencies)
-frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
-power_spectrum = np.concatenate((power_spectrum, [0]))
-power_spectrum = power_spectrum * 4 * np.var(clipped_flux) / clipped_flux.size
-power_spectrum = np.sqrt(power_spectrum)
-power_spectrum *= 1e6 #* ((power_spectrum / (np.median(power_spectrum))) - 1.) # to ppm
+newphase = raw_input('--> Use highest peak for folding? (y/n) ')
+while newphase != "y" and newphase != "n":
+   newphase = raw_input('--> Please enter y or n: ')
 
-# close-up of interesting part of power spectrum
-plt.figure(1)
-plt.plot(frequencies, power_spectrum, 'r-')
-plt.xlim(0, max(frequencies))
-plt.ylim(ymin = 0)
-plt.xlabel('Frequency ($\mu$Hz)')
-plt.ylabel('Amplitude (ppm)')
-exec("plt.title('%d')" % kic)
-exec("plt.savefig('kic%d_zoomed.png')" % kic)
+if newphase == "n":
+   while True:
+      try:
+         foldfreq = float(raw_input('--> Enter folding frequency: (microHertz) '))
+         break
+      except ValueError:
+         print '--> Please enter a float'
+
+elif newphase == "y":
+   # second, more intense fourier transform
+   print ' '
+   print '--> Fourier transform for phase curve <--'
+   print ' '
+   while True:
+      try:
+         ofac = int(raw_input('--> Oversampling factor: '))
+         break
+      except ValueError:
+         print '--> Please enter an integer'
+   while True:
+      try:
+         hifac = float(raw_input('--> Nyquist range factor: '))
+         break
+      except ValueError:
+         print '--> Please enter a float'
+   while True:
+      try:
+         topfreq = float(raw_input('--> Highest frequency to plot in microHertz: '))
+         break
+      except ValueError:
+         print '--> Please enter a float'
+   print ' '
+   print ' '
+   frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
+   hifac = topfreq / max(frequencies)
+   frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
+   power_spectrum = np.concatenate((power_spectrum, [0]))
+   power_spectrum = power_spectrum * 4 * np.var(clipped_flux) / clipped_flux.size
+   power_spectrum = np.sqrt(power_spectrum)
+   power_spectrum *= 1e6 #* ((power_spectrum / (np.median(power_spectrum))) - 1.) # to ppm
+
+   # close-up of interesting part of power spectrum
+   plt.figure(1)
+   plt.plot(frequencies, power_spectrum, 'r-')
+   plt.xlim(0, max(frequencies))
+   plt.ylim(ymin = 0)
+   plt.xlabel('Frequency ($\mu$Hz)')
+   plt.ylabel('Amplitude (ppm)')
+   exec("plt.title('%d')" % kic)
+   exec("plt.savefig('kic%d_zoomed.png')" % kic)
+
+   foldfreq = frequencies[power_spectrum.argmax()]
 
 # detecting frequency for phase curve and folding
-foldfreq = frequencies[power_spectrum.argmax()]
 convfactor = (1. / (60 * 60 * 24)) * (10 ** 6)
 foldfreq = foldfreq / convfactor
 foldper = 1. / foldfreq
@@ -96,6 +111,8 @@ sortblend = np.transpose(sortblend)
 time = sortblend[:,0]
 sap_flux = sortblend[:,1]
 
+print ' '
+print ' '
 print '--> Phase curve <--'
 print ' '
 smoothtype2 = raw_input('--> Smooth or bin the phase curve? (s/b) ')
@@ -189,7 +206,7 @@ elif smoothtype2 == "b": # binning
    exec("plt.savefig('kic%d_phase.png')" % kic)
 
 print ' '
-show = raw_input('--> Show plots now? (y/n) ')
+show = raw_input('--> Show plot(s) now? (y/n) ')
 while show != "y" and show != "n":
    show = raw_input('--> Please enter y or n: ')
 print ' '
