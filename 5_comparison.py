@@ -66,7 +66,8 @@ y = hd2['NAXIS2']
 hdulist.close()
 
 imgflux = np.flipud(flux[0])
-imgflux = np.fliplr(imgflux)
+if eo == 0:
+   imgflux = np.fliplr(imgflux)
 
 
 ### IMAGE 2: UKIRT IMAGE ###
