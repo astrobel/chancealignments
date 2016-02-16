@@ -42,28 +42,23 @@ adj = raw_input('--> Adjust the UKIRT image orientation? (y/n) ')
 while adj != "y" and adj != "n":
    adj = raw_input('--> Please enter y or n: ')
 if adj == "y":
-   flip = raw_input('--> Flip horizontally? (y/n) ')
-   while flip != "y" and flip != "n":
-      flip = raw_input('--> Please type either y or n: ')
-   if flip == "y":
-      flux2 = np.fliplr(flux2)
-   else:
-      pass
-   rot = raw_input('--> Rotate? (y/n) ')
-   while rot != "y" and rot != "n":
-      rot = raw_input('--> Please type either y or n: ')
-   if rot == "y":
+   rotby = 1
+   while (rotby % 90) != 0:
       while True:
          try:
-            rotby = int(raw_input('--> Enter a multiple of 90 degrees: '))
+            rotby = int(raw_input('--> Enter a multiple of 90 degrees for rotation: '))
             break
          except ValueError:
             print '--> Please enter an integer'
-      rotby = np.float64(rotby)
-      rotby /= 90
-      flux2 = np.rot90(flux2, rotby)
-   else:
-      pass
+      if (rotby % 90) == 0:
+         break
+      else:
+         continue
+   rotby = np.float64(rotby)
+   rotby /= 90
+   flux2 = np.rot90(flux2, rotby)
+else:
+   pass
 print ' '
 
 
