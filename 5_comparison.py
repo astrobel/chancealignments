@@ -15,13 +15,32 @@ mpl.rcParams['text.latex.preamble'] = [
 
 ### IMAGE 1: ONE KEPLER PIXEL IMAGE, Q_ ###
 
+quarterlist = []
+
+for i in os.listdir(os.getcwd()):
+   if i.endswith("lpd-targ.fits"):
+      exec("hdulist_temp = pyfits.open('%s')" % i)
+      parameters = hdulist_temp[0].header
+      q = parameters['QUARTER']
+      quarterlist.append(q)
+      hdulist_temp.close()
+   else:
+      continue
+
 print ' '
-while True:
-   try:
-      repquarter = int(raw_input('--> Which quarter? (0-17) '))
+repquarter = 18 # placeholder, since there is 0 but there is no 18
+while repquarter not in quarterlist:
+   while True:
+      try:
+         repquarter = int(raw_input('--> Which quarter? (0-17) '))
+         break
+      except ValueError:
+         print '--> Please enter an integer'
+   if repquarter in quarterlist:
       break
-   except ValueError:
-      print '--> Please enter an integer from 0-17'
+   else:
+      print '--> No data for this quarter'
+      continue
 print ' '
 
 for i in os.listdir(os.getcwd()):
