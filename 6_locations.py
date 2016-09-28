@@ -36,30 +36,18 @@ for i in os.listdir(os.getcwd()):
       continue
 
 flux2 = hdulist[1].data
+parameters = hdulist[1].header
+cam = parameters['CAMNUM']
 
-print ' '
-adj = raw_input('--> Adjust the UKIRT image orientation? (y/n) ')
-while adj != "y" and adj != "n":
-   adj = raw_input('--> Please enter y or n: ')
-if adj == "y":
-   rotby = 1
-   while (rotby % 90) != 0:
-      while True:
-         try:
-            rotby = int(raw_input('--> Enter a multiple of 90 degrees for rotation: '))
-            break
-         except ValueError:
-            print '--> Please enter an integer'
-      if (rotby % 90) == 0:
-         break
-      else:
-         continue
-   rotby = np.float64(rotby)
-   rotby /= 90
-   flux2 = np.rot90(flux2, rotby)
-else:
-   pass
-print ' '
+rotby = 360 - 90*cam
+rotby /= 90
+flux2 = np.rot90(flux2, rotby)
+
+kicstr = str(kic)
+if len(kicstr) == 7:
+   scaling = int(kicstr[:1]) / 2.
+elif len(kicstr) == 8:
+   scaling = int(kicstr[:2]) / 2.
 
 
 ### READING IN SOME OTHER FILES ###
@@ -97,10 +85,7 @@ ukirt.axes.get_xaxis().set_ticks([])
 ukirt.axes.get_yaxis().set_ticks([])
 
 plt.plot([25, 25], [25, 55], '-', color='#00ff8c')
-plt.plot([25, 55], [25, 25], '-', color='#00ff8c')
-
-plt.text(30, 60, 'N', color='#00ff8c')
-plt.text(70, 20, 'E', color='#00ff8c')
+plt.plot([25, 55], [25, 25], '--', color='#00ff8c')
 
 main = plt.Circle((149, 149), 15, color='#00ff8c', fill=False)
 plt.gca().add_artist(main)
@@ -110,7 +95,7 @@ plt.gca().add_artist(main)
 
 exec("plt.savefig('kic%dloc.png')" % kic)
 
-cutoffra = 1/100. + centdec/100000 # i suspect the image is not precisely 1 arcmin in RA???
+cutoffra = 1/100. + centdec*scaling/100000 # i suspect the image is not precisely 1 arcmin in RA???
 cutoffdec = 1/120. # 1/2 arcmin in degrees
 
 for i, val in enumerate(ukra):
