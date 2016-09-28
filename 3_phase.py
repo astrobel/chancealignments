@@ -74,7 +74,6 @@ elif newphase == "y":
       except ValueError:
          print '--> Please enter a float'
    print ' '
-   print ' '
    frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
    hifac = topfreq / max(frequencies)
    frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
@@ -160,10 +159,12 @@ elif smoothtype2 == "b": # binning
    # manual histogram
    binsize = max(time) / binnum
    bindex = 0
-   flux_sum = np.zeros(max(time) / binsize)
-   flux_num = np.zeros(max(time) / binsize)
+   binnum = int(binnum)
+   flux_sum = np.zeros(binnum)
+   flux_num = np.zeros(binnum)
    for i, t in enumerate(time):
       bindex = (t - (t % binsize)) / binsize - 1
+      bindex = int(bindex)
       flux_sum[bindex] = sap_flux[i] + flux_sum[bindex]
       flux_num[bindex] += 1
    flux_sum = np.divide(flux_sum, flux_num)
@@ -175,13 +176,14 @@ elif smoothtype2 == "b": # binning
       time_binned[i] = tr.translate(val, 0, foldper, 0, 1)
       time_doubled[i] = time_binned[i] + 1
 
-   binnum2 = np.ceil(binnum / 10.)
+   binnum2 = int(np.ceil(binnum / 10.))
    binsize2 = max(time) / binnum2
    bindex2 = 0
-   flux_sum2 = np.zeros(max(time) / binsize2)
-   flux_num2 = np.zeros(max(time) / binsize2)
+   flux_sum2 = np.zeros(binnum2)
+   flux_num2 = np.zeros(binnum2)
    for i, t2 in enumerate(time):
       bindex2 = (t2 - (t2 % binsize2)) / binsize2 - 1
+      bindex2 = int(bindex2)
       flux_sum2[bindex2] = sap_flux[i] + flux_sum2[bindex2]
       flux_num2[bindex2] += 1
    time_binned2 = np.linspace(0, max(time), binnum2)
@@ -195,10 +197,18 @@ elif smoothtype2 == "b": # binning
 
    # plotting phase curve
    plt.figure(2)
-   plt.plot(time_binned, flux_sum, 'ro', markersize=3)
-   plt.plot(time_doubled, flux_sum, 'ro', markersize=3)
-   plt.plot(time_binned2, flux_sum2, 'cs')
-   plt.plot(time_doubled2, flux_sum2, 'cs')
+   if np.size(time_binned) == np.size(flux_sum):
+      plt.plot(time_binned, flux_sum, 'ro', markersize=3)
+      plt.plot(time_doubled, flux_sum, 'ro', markersize=3)
+   else:
+      plt.plot(time_binned[:binsize-1], flux_sum[:binsize-1], 'ro', markersize=3)
+      plt.plot(time_doubled[:binsize-1], flux_sum[:binsize-1], 'ro', markersize=3)
+   if np.size(time_binned2) == np.size(flux_sum2):
+      plt.plot(time_binned2, flux_sum2, 'cs')
+      plt.plot(time_doubled2, flux_sum2, 'cs')
+   else:
+      plt.plot(time_binned2[:binsize2-1], flux_sum2[:binsize2-1], 'cs')
+      plt.plot(time_doubled2[:binsize2-1], flux_sum2[:binsize2-1], 'cs')
    plt.xlim(0, max(time_doubled))
    plt.xlabel('Normalised Time mod %f days' % foldper)
    plt.ylabel('Fractional Intensity')
