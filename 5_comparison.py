@@ -100,30 +100,12 @@ for i in os.listdir(os.getcwd()):
       continue
 
 flux2 = hdulist[1].data
+parameters = hdulist[1].header
+cam = parameters['CAMNUM']
 
-print ' '
-adj = raw_input('--> Adjust the UKIRT image orientation? (y/n) ')
-while adj != "y" and adj != "n":
-   adj = raw_input('--> Please enter y or n: ')
-if adj == "y":
-   rotby = 1
-   while (rotby % 90) != 0:
-      while True:
-         try:
-            rotby = int(raw_input('--> Enter a multiple of 90 degrees for rotation: '))
-            break
-         except ValueError:
-            print '--> Please enter an integer'
-      if (rotby % 90) == 0:
-         break
-      else:
-         continue
-   rotby = np.float64(rotby)
-   rotby /= 90
-   flux2 = np.rot90(flux2, rotby)
-else:
-   pass
-print ' '
+rotby = 360 - 90*cam
+rotby /= 90
+flux2 = np.rot90(flux2, rotby)
 
 
 ### PLOTTING ###
