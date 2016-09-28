@@ -10,7 +10,7 @@ Features:
 --> Option to show all plots at the end of running each script
 --> Code to visually compare Kepler pixel apertures to UKIRT (UK Infrared Telescope) images
 --> !! NEW !! Difference imaging code to locate contaminant source and false positives
---> !! NEW !! Options for phasing light curves on peaks that are not the highest in Fourier space
+--> !! NEW !! Options for phasing light curves on peaks that do not have the highest amplitude in Fourier space
 
 You will need:
 --> All your Kepler llc.fits and lpd-targ.fits files in one folder
