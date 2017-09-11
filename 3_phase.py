@@ -5,9 +5,8 @@ import matplotlib as mpl
 from astropy.io import fits as pyfits
 from astropy.convolution import convolve, Box1DKernel, Gaussian1DKernel
 import lomb
-import smoothing
 import translate as tr
-import os
+import os, time
 
 mpl.rc('text', usetex=True)
 mpl.rcParams['text.latex.preamble'] = [
@@ -23,6 +22,17 @@ def fft(time, flux, ofac, hifac):
    uHzfreq = freq * convfactor #11.57, conversion c/d to mHz
    return uHzfreq, power
 
+def translate(value, leftMin, leftMax, rightMin, rightMax):
+   # Figure out how 'wide' each range is
+   leftSpan = leftMax - leftMin
+   rightSpan = rightMax - rightMin
+
+   # Convert the left range into a 0-1 range (float)
+   valueScaled = float(value - leftMin) / float(leftSpan)
+
+   # Convert the 0-1 range into a value in the right range.
+   return rightMin + (valueScaled * rightSpan)
+
 for i in os.listdir(os.getcwd()):
    if i.endswith("llc.fits"):
       exec("hdulist = pyfits.open('%s')" % i)
@@ -32,10 +42,9 @@ for i in os.listdir(os.getcwd()):
    else:
       continue
 
-# read in light curve
-exec("importblend = np.loadtxt('kic%d_lc.dat')" % kic)
-clipped_time = importblend[:,0]
-clipped_flux = importblend[:,1]
+exec("lc = np.loadtxt('kic%d_lc.dat')" % kic)
+times = lc[:,0]
+ampls = lc[:,1]
 
 print ' '
 newphase = raw_input('--> Use highest peak for folding? (y/n) ')
@@ -67,153 +76,62 @@ elif newphase == "y":
          break
       except ValueError:
          print '--> Please enter a float'
-   while True:
-      try:
-         topfreq = float(raw_input('--> Highest frequency to plot in microHertz: '))
-         break
-      except ValueError:
-         print '--> Please enter a float'
    print ' '
-   frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
-   hifac = topfreq / max(frequencies)
-   frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
+   frequencies, power_spectrum = fft(np.asarray(times), np.asarray(ampls), ofac, hifac)
+   hifac = 283 / max(frequencies)
+   frequencies, power_spectrum = fft(np.asarray(times), np.asarray(ampls), ofac, hifac)
    power_spectrum = np.concatenate((power_spectrum, [0]))
-   power_spectrum = power_spectrum * 4 * np.var(clipped_flux) / clipped_flux.size
+   power_spectrum = power_spectrum * 4 * np.var(ampls) / ampls.size
    power_spectrum = np.sqrt(power_spectrum)
    power_spectrum *= 1e6 #* ((power_spectrum / (np.median(power_spectrum))) - 1.) # to ppm
 
-   # close-up of interesting part of power spectrum
-   plt.figure(1)
-   plt.plot(frequencies, power_spectrum, 'r-')
-   plt.xlim(0, max(frequencies))
-   plt.ylim(ymin = 0)
-   plt.xlabel('Frequency ($\mu$Hz)')
-   plt.ylabel('Amplitude (ppm)')
-   exec("plt.title('%d')" % kic)
-   exec("plt.savefig('kic%d_zoomed.png')" % kic)
-
    foldfreq = frequencies[power_spectrum.argmax()]
 
-# detecting frequency for phase curve and folding
-convfactor = (1. / (60 * 60 * 24)) * (10 ** 6)
-foldfreq = foldfreq / convfactor
-foldper = 1. / foldfreq
-clipped_time = clipped_time % foldper
-
-# sort time and flux for binning
-sortblend = np.zeros([clipped_time.size, 2])
-sortblend = np.array([clipped_time, clipped_flux])
-np.reshape(sortblend, (2, clipped_time.size))
-sortblend.sort(axis=0)
-np.reshape(sortblend, (clipped_time.size, 2))
-sortblend = np.transpose(sortblend)
-time = sortblend[:,0]
-sap_flux = sortblend[:,1]
-
 print ' '
-print ' '
-print '--> Phase curve <--'
-print ' '
-smoothtype2 = raw_input('--> Smooth or bin the phase curve? (s/b) ')
-while smoothtype2 != "b" and smoothtype2 != "s":
-   smoothtype2 = raw_input('--> Please enter s or b: ')
 
-if smoothtype2 == "s": # smoothing
+tohz = foldfreq * 1e-6
+tos = 1/tohz
+foldper = tos/86400
 
-   smoothtype = raw_input('--> Boxcar or Gaussian smoothing? (b/g) ')
-   while smoothtype != "b" and smoothtype != "g":
-      smoothtype = raw_input('--> Please enter b or g: ')
-   while True:
-      try:
-         kern = int(raw_input('--> Smoothing kernel: '))
-         break
-      except ValueError:
-         print '--> Please enter an integer'
-   print ' '
+binnum = 100
+binnum2 = 1000
+binsize = foldper / binnum
+binsize2 = foldper / binnum2
 
-   # smoothing method
-   if smoothtype == "b": # boxcar smoothing
-      sap_flux2, smth_flux = smoothing.boxsmooth(time, sap_flux, kern)
-   elif smoothtype == "g": # gaussian smoothing
-      sap_flux2, smth_flux = smoothing.gausssmooth(time, sap_flux, kern)
+phasedtimearray = np.zeros(len(times))
+finalampls = np.zeros(binnum)
+amplcounts = np.zeros(binnum)
+finalampls2 = np.zeros(binnum2)
+amplcounts2 = np.zeros(binnum2)
 
-   # plotting phase curve
-   plt.figure(2)
-   plt.plot(time, smth_flux, 'ro', markersize=3)
-   plt.xlabel('Time mod %f days' % foldper)
-   plt.ylabel('Fractional Intensity')
-   exec("plt.title('%d')" % kic)
-   exec("plt.savefig('kic%d_phase.png')" % kic)
-
-elif smoothtype2 == "b": # binning
+for i, val in enumerate(times):
+   phasedtime = val % foldper
+   newphasedtime = tr.translate(phasedtime, 0, foldper, 0, 1)
+   phasedtimearray[i] = newphasedtime
+   bindex = (phasedtime - (phasedtime % binsize)) / binsize - 1
+   finalampls[bindex] += ampls[i]
+   amplcounts[bindex] += 1
+   bindex2 = (phasedtime - (phasedtime % binsize2)) / binsize2 - 1
+   finalampls2[bindex2] += ampls[i]
+   amplcounts2[bindex2] += 1
    
-   while True:
-      try:
-         binnum = int(raw_input('--> Number of bins: (integer) '))
-         break
-      except ValueError:
-         print '--> Please enter an integer'
-   binnum = np.float64(binnum)
-   print ' '
+finalampls = np.divide(finalampls, amplcounts)
+finalampls2 = np.divide(finalampls2, amplcounts2)
 
-   # manual histogram
-   binsize = max(time) / binnum
-   bindex = 0
-   binnum = int(binnum)
-   flux_sum = np.zeros(binnum)
-   flux_num = np.zeros(binnum)
-   for i, t in enumerate(time):
-      bindex = (t - (t % binsize)) / binsize - 1
-      bindex = int(bindex)
-      flux_sum[bindex] = sap_flux[i] + flux_sum[bindex]
-      flux_num[bindex] += 1
-   flux_sum = np.divide(flux_sum, flux_num)
-   time_binned = np.linspace(0, max(time), binnum)
+finaltimes = np.histogram(phasedtimearray, bins=binnum-1, range=(0,1))
+finaltimes2 = np.histogram(phasedtimearray, bins=binnum2-1, range=(0,1))
 
-   time_doubled = np.zeros(time_binned.size)
+plt.figure(1)
 
-   for i, val in enumerate(time_binned):
-      time_binned[i] = tr.translate(val, 0, foldper, 0, 1)
-      time_doubled[i] = time_binned[i] + 1
-
-   binnum2 = int(np.ceil(binnum / 10.))
-   binsize2 = max(time) / binnum2
-   bindex2 = 0
-   flux_sum2 = np.zeros(binnum2)
-   flux_num2 = np.zeros(binnum2)
-   for i, t2 in enumerate(time):
-      bindex2 = (t2 - (t2 % binsize2)) / binsize2 - 1
-      bindex2 = int(bindex2)
-      flux_sum2[bindex2] = sap_flux[i] + flux_sum2[bindex2]
-      flux_num2[bindex2] += 1
-   time_binned2 = np.linspace(0, max(time), binnum2)
-   flux_sum2 = np.divide(flux_sum2, flux_num2)
-
-   time_doubled2 = np.zeros(time_binned2.size)
-
-   for i, val in enumerate(time_binned2):
-      time_binned2[i] = tr.translate(val, 0, foldper, 0, 1)
-      time_doubled2[i] = time_binned2[i] + 1
-
-   # plotting phase curve
-   plt.figure(2)
-   if np.size(time_binned) == np.size(flux_sum):
-      plt.plot(time_binned, flux_sum, 'ro', markersize=3)
-      plt.plot(time_doubled, flux_sum, 'ro', markersize=3)
-   else:
-      plt.plot(time_binned[:binsize-1], flux_sum[:binsize-1], 'ro', markersize=3)
-      plt.plot(time_doubled[:binsize-1], flux_sum[:binsize-1], 'ro', markersize=3)
-   if np.size(time_binned2) == np.size(flux_sum2):
-      plt.plot(time_binned2, flux_sum2, 'cs')
-      plt.plot(time_doubled2, flux_sum2, 'cs')
-   else:
-      plt.plot(time_binned2[:binsize2-1], flux_sum2[:binsize2-1], 'cs')
-      plt.plot(time_doubled2[:binsize2-1], flux_sum2[:binsize2-1], 'cs')
-   plt.xlim(0, max(time_doubled))
-   plt.xlabel('Normalised Time mod %f days' % foldper)
-   plt.ylabel('Fractional Intensity')
-   exec("plt.title('%d')" % kic)
-   exec("plt.savefig('kic%d_phase.png')" % kic)
+plt.plot(finaltimes2[1], finalampls2, 'cs', markersize=5)
+plt.plot(finaltimes2[1]+1, finalampls2, 'cs', markersize=5)
+plt.plot(finaltimes[1], finalampls, 'ro', markersize=5)
+plt.plot(finaltimes[1]+1, finalampls, 'ro', markersize=5)
+plt.xlim(0, max(finaltimes2[1]+1))
+plt.xlabel('Normalised Time mod %f days' % foldper)
+plt.ylabel('Fractional Intensity')
+exec("plt.title('%d')" % kic)
+exec("plt.savefig('kic%d_phase.png')" % kic)
 
 print ' '
 show = raw_input('--> Show plot(s) now? (y/n) ')
