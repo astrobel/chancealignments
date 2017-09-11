@@ -8,13 +8,13 @@ from astropy.convolution import convolve, Box1DKernel, Gaussian1DKernel
 import lomb
 import smoothing
 import translate as tr
-import os
+import os, sys
 
 mpl.rc('text', usetex=True)
 mpl.rcParams['text.latex.preamble'] = [
-		r'\usepackage{helvet}',
-		r'\usepackage[EULERGREEK]{sansmath}',
-		r'\sansmath'
+      r'\usepackage{helvet}',
+      r'\usepackage[EULERGREEK]{sansmath}',
+      r'\sansmath'
 ]
 mpl.rcParams['axes.formatter.useoffset'] = False
 mpl.rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -22,89 +22,91 @@ mpl.rcParams['ps.useafm'] = True
 mpl.rcParams['pdf.use14corefonts'] = True
 
 def fft(time, flux, ofac, hifac):
-	freq,power, nout, jmax, prob = lomb.fasper(time, flux, ofac, hifac)
-	convfactor = (1. / (60 * 60 * 24)) * (10 ** 6)
-	uHzfreq = freq * convfactor #11.57, conversion c/d to mHz
-	return uHzfreq, power
+   freq,power, nout, jmax, prob = lomb.fasper(time, flux, ofac, hifac)
+   convfactor = (1. / (60 * 60 * 24)) * (10 ** 6)
+   uHzfreq = freq * convfactor #11.57, conversion c/d to mHz
+   return uHzfreq, power
 
 # pick a quarter
 quarterlist = []
 
 for i in os.listdir(os.getcwd()):
-	if i.endswith("lpd-targ.fits"):
-		exec("hdulist_temp = pyfits.open('%s')" % i)
-		things1 = hdulist_temp[0].header
-		q1 = things1['QUARTER']
-		quarterlist.append(q1)
-		hdulist_temp.close()
-	else:
-		continue
+   if i.endswith("lpd-targ.fits"):
+      exec("hdulist_temp = pyfits.open('%s')" % i)
+      things1 = hdulist_temp[0].header
+      q1 = things1['QUARTER']
+      quarterlist.append(q1)
+      hdulist_temp.close()
+   else:
+      continue
 
 print ' '
 repquarter = 18 # placeholder, since there is 0 but there is no 18
 while repquarter not in quarterlist:
-	while True:
-		try:
-			repquarter = int(raw_input('--> Which quarter? (0-17) '))
-			break
-		except ValueError:
-			print '--> Please enter an integer'
-	if repquarter in quarterlist:
-		break
-	else:
-		print '--> No data for this quarter'
-		continue
+   while True:
+      try:
+         repquarter = int(raw_input('--> Which quarter? (0-17) '))
+         break
+      except ValueError:
+         print '--> Please enter an integer'
+   if repquarter in quarterlist:
+      break
+   else:
+      print '--> No data for this quarter'
+      continue
 print ' '
 
 # grab the quarter
 for i in os.listdir(os.getcwd()):
-	if i.endswith("lpd-targ.fits"):
-		exec("hdulist_temp = pyfits.open('%s')" % i)
-		things = hdulist_temp[0].header
-		q = things['QUARTER']
-		if q == repquarter:
-			exec("hdulist1 = pyfits.open('%s')" % i)
-			parameters = hdulist1[0].header
-			kic = parameters['KEPLERID']
-			channel = parameters['CHANNEL']
-			table = hdulist1[1].data
-			flux1 = table['FLUX']
-			time1 = table['TIME']
-			hd1 = hdulist1[1].header
-			w = wcs.WCS(hd1, keysel=['binary'])
-			hd2 = hdulist1[2].header
-			x = hd2['NAXIS1']
-			y = hd2['NAXIS2']
-			refx = hd2['CRPIX1']
-			refy = hd2['CRPIX2']
-			refra = hd2['CRVAL1']
-			refdec = hd2['CRVAL2']
-			hdulist1.close()
-		else:
-			continue
-	else:
-		continue
+   if i.endswith("lpd-targ.fits"):
+      exec("hdulist_temp = pyfits.open('%s')" % i)
+      things = hdulist_temp[0].header
+      q = things['QUARTER']
+      if q == repquarter:
+         exec("hdulist1 = pyfits.open('%s')" % i)
+         parameters = hdulist1[0].header
+         kic = parameters['KEPLERID']
+         channel = parameters['CHANNEL']
+         table = hdulist1[1].data
+         flux1 = table['FLUX']
+         time1 = table['TIME']
+         hd1 = hdulist1[1].header
+         w = wcs.WCS(hd1, keysel=['binary'])
+         hd2 = hdulist1[2].header
+         x = hd2['NAXIS1']
+         y = hd2['NAXIS2']
+         refx = hd2['CRPIX1']
+         refy = hd2['CRPIX2']
+         refra = hd2['CRVAL1']
+         refdec = hd2['CRVAL2']
+         hdulist1.close()
+      else:
+         continue
+   else:
+      continue
 
 if (channel%2) == 0:
-	eo = 0
+   eo = 0
 else:
-	eo = 1
+   eo = 1
 
 dim = len(flux1)
 nans = []
 
 for i in range(dim):
-	if np.isnan(flux1[i,:]).all() == True:
-		nans.append(i)
+   # fluxnew[i,:] = flux1[i,:]
+   if np.isnan(flux1[i,:]).all() == True:
+      # print 'ye'
+      nans.append(i)
 
 fluxnew = np.delete(flux1, nans, axis=0)
 
 avgflux = np.mean(fluxnew, axis=0)
 
 # read in light curve
-exec("importblend = np.loadtxt('kic%d_lc.dat')" % kic)
-clipped_time = importblend[:,0]
-clipped_flux = importblend[:,1]
+exec("lc = np.loadtxt('kic%d_lc.dat')" % kic)
+times = lc[:,0]
+ampls = lc[:,1]
 
 print ' '
 newphase = raw_input('--> Use highest peak for folding? (y/n) ')
@@ -137,82 +139,78 @@ elif newphase == "y":
       except ValueError:
          print '--> Please enter a float'
    print ' '
-   frequencies, power_spectrum = fft(np.asarray(clipped_time), np.asarray(clipped_flux), ofac, hifac)
+   frequencies, power_spectrum = fft(np.asarray(times), np.asarray(ampls), ofac, hifac)
+   hifac = 283 / max(frequencies)
+   frequencies, power_spectrum = fft(np.asarray(times), np.asarray(ampls), ofac, hifac)
    power_spectrum = np.concatenate((power_spectrum, [0]))
-   power_spectrum = power_spectrum * 4 * np.var(clipped_flux) / clipped_flux.size
+   power_spectrum = power_spectrum * 4 * np.var(ampls) / ampls.size
    power_spectrum = np.sqrt(power_spectrum)
    power_spectrum *= 1e6 #* ((power_spectrum / (np.median(power_spectrum))) - 1.) # to ppm
 
    foldfreq = frequencies[power_spectrum.argmax()]
 
-# detecting frequency for phase curve and folding
-convfactor = (1. / (60 * 60 * 24)) * (10 ** 6)
-foldfreq = foldfreq / convfactor
-foldper = 1. / foldfreq
-clipped_time = clipped_time % foldper
-
-# sort time and flux for binning
-sortblend = np.zeros([clipped_time.size, 2])
-sortblend = np.array([clipped_time, clipped_flux])
-np.reshape(sortblend, (2, clipped_time.size))
-sortblend.sort(axis=0)
-np.reshape(sortblend, (clipped_time.size, 2))
-sortblend = np.transpose(sortblend)
-time = sortblend[:,0]
-sap_flux = sortblend[:,1]
-
-# binning
-while True:
-	try:
-		binnum = int(raw_input('--> Number of bins: (integer) '))
-		break
-	except ValueError:
-		print '--> Please enter an integer'
-binnum = np.float64(binnum)
 print ' '
 
-binsize = max(time) / binnum
-bindex = 0
-flux_sum = np.zeros(max(time) / binsize)
-flux_num = np.zeros(max(time) / binsize)
-for i, t in enumerate(time):
-	bindex = (t - (t % binsize)) / binsize - 1
-	flux_sum[bindex] = sap_flux[i] + flux_sum[bindex]
-	flux_num[bindex] += 1
-flux_sum = np.divide(flux_sum, flux_num)
-time_binned = np.linspace(0, max(time), binnum)
+tohz = foldfreq * 1e-6
+tos = 1/tohz
+foldper = tos/86400
 
-time_doubled = np.zeros(time_binned.size)
+binnum = 100
+binnum2 = 1000
+binsize = foldper / binnum
+binsize2 = foldper / binnum2
 
-for i, val in enumerate(time_binned):
-	time_binned[i] = tr.translate(val, 0, foldper, 0, 1)
-	time_doubled[i] = time_binned[i] + 1
+phasedtimearray = np.zeros(len(times))
+finalampls = np.zeros(binnum)
+amplcounts = np.zeros(binnum)
+finalampls2 = np.zeros(binnum2)
+amplcounts2 = np.zeros(binnum2)
+
+for i, val in enumerate(times):
+   phasedtime = val % foldper
+   newphasedtime = tr.translate(phasedtime, 0, foldper, 0, 1)
+   phasedtimearray[i] = newphasedtime
+   bindex = (phasedtime - (phasedtime % binsize)) / binsize - 1
+   finalampls[bindex] += ampls[i]
+   amplcounts[bindex] += 1
+   bindex2 = (phasedtime - (phasedtime % binsize2)) / binsize2 - 1
+   finalampls2[bindex2] += ampls[i]
+   amplcounts2[bindex2] += 1
+   
+finalampls = np.divide(finalampls, amplcounts)
+finalampls2 = np.divide(finalampls2, amplcounts2)
+
+finaltimes = np.histogram(phasedtimearray, bins=binnum-1, range=(0,1))
+finaltimes2 = np.histogram(phasedtimearray, bins=binnum2-1, range=(0,1))
 
 nanlist = []
-for i, val in enumerate(flux_sum):
-	if np.isnan(val) == True:
-		nanlist.append(i)
+for i, val in enumerate(finalampls):
+   if np.isnan(val) == True:
+      nanlist.append(i)
 
-phasetime = np.delete(time_binned, nanlist)
-phaseflux = np.delete(flux_sum, nanlist)
+phasetime = np.delete(finaltimes, nanlist)
+phaseflux = np.delete(finalampls, nanlist)
 
-maxpos = np.argmax(phaseflux) / np.float64(len(phasetime))
-minpos = np.argmin(phaseflux) / np.float64(len(phasetime))
+maxpos = np.argmax(phaseflux) / np.float64(len(phasetime[1]))
+minpos = np.argmin(phaseflux) / np.float64(len(phasetime[1]))
+
 
 # folding the pixel fluxes
 time1 = time1 % foldper
 for i, val in enumerate(time1):
-	time1[i] = tr.translate(val, 0, foldper, 0, 1)
+   time1[i] = tr.translate(val, 0, foldper, 0, 1)
 
 # find the fluxes for differencing
 timeflags = np.zeros(len(time1))
 tolerance = 0.05
 
 for i, time in enumerate(time1):
-	if time < maxpos + tolerance and time > maxpos - tolerance:
-		timeflags[i] = 1
-	elif time < minpos + tolerance and time > minpos - tolerance:
-		timeflags[i] = -1
+   if time < maxpos + tolerance and time > maxpos - tolerance:
+      timeflags[i] = 1
+   elif time < minpos + tolerance and time > minpos - tolerance:
+      timeflags[i] = -1
+
+# print max(timeflags), min(timeflags)
 
 highflags = np.where(timeflags>0)[0]
 lowflags = np.where(timeflags<0)[0]
@@ -224,33 +222,74 @@ lownans = []
 fluxhigh = np.zeros((highdim, y, x))
 fluxlow = np.zeros((lowdim, y, x))
 
+# print np.shape(fluxhigh), np.shape(fluxlow)
+
 for i in range(highdim):
-	fluxhigh[i,:] = flux1[highflags[i]]
-	if np.isnan(fluxhigh[i,:]).all() == True:
-		highnans.append(i)
+   fluxhigh[i,:] = flux1[highflags[i]]
+   if np.isnan(fluxhigh[i,:]).all() == True:
+      highnans.append(i)
 for i in range(lowdim):
-	fluxlow[i,:] = flux1[lowflags[i]]
-	if np.isnan(fluxlow[i,:]).all() == True:
-		lownans.append(i)
+   fluxlow[i,:] = flux1[lowflags[i]]
+   if np.isnan(fluxlow[i,:]).all() == True:
+      lownans.append(i)
 
 fluxhigh1 = np.delete(fluxhigh, highnans, axis=0)
 fluxlow1 = np.delete(fluxlow, lownans, axis=0)
+# print fluxhigh, fluxlow
 
 fluxdiff = np.abs(np.average(fluxhigh1, axis=0) - np.average(fluxlow1, axis=0))
 
+# print fluxdiff
+
 imgflux = np.flipud(fluxdiff)
 if eo == 0:
-	imgflux = np.fliplr(imgflux)
+   imgflux = np.fliplr(imgflux)
 avgflux = np.flipud(avgflux)
 if eo == 0:
-	avgflux = np.fliplr(avgflux)
+   avgflux = np.fliplr(avgflux)
 
 
 ### PLOTTING ###
 
 plt.figure(1)
 
+# pic = plt.imshow(imgflux, cmap='pink')
+# exec("plt.title('%d q%d', fontsize=20)" % (kic, repquarter))
+# pic.set_interpolation('nearest')
+# plt.xlim(-0.5, x-0.5)
+# plt.ylim(y-0.5, -0.5)
+
+# pic.axes.get_xaxis().set_ticklabels([])
+# pic.axes.get_yaxis().set_ticklabels([])
+# pic.axes.get_xaxis().set_ticks([])
+# pic.axes.get_yaxis().set_ticks([])
+
+# crval = w.wcs.crval
+# north = crval + np.array([0, 6/3600.])
+# east = crval + np.array([ 6/3600., 0])
+
+# ncoords = np.vstack([crval, north])
+# ecoords = np.vstack([crval, east])
+# npixels = w.wcs_world2pix(ncoords , 0)
+# epixels = w.wcs_world2pix(ecoords , 0)
+# npixels[1, 1] = npixels[0, 1] - (npixels[1, 1] - npixels[0, 1]) # flip ud
+# epixels[1, 1] = epixels[0, 1] - (epixels[1, 1] - epixels[0, 1])
+# if eo == 0:
+#    npixels[1, 0] = npixels[0, 0] - (npixels[1, 0] - npixels[0, 0]) # flip lr
+#    epixels[1, 0] = epixels[0, 0] - (epixels[1, 0] - epixels[0, 0])
+# plt.plot(npixels[:,0], npixels[:,1], color='#00ff8c')
+# plt.plot(epixels[:,0], epixels[:,1], '--', color='#00ff8c')
+
+# if eo == 1:
+#    plt.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#00ff8c', ms=10)
+# elif eo == 0:
+#    plt.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#00ff8c', ms=10)
+
+# exec("plt.savefig('kic%dq%ddifferenceimg.eps')" % (kic, repquarter))
+
 fig, (ukirt, kepler) = plt.subplots(1, 2) 
+
+# exec("fig.suptitle('%d q%d', fontsize=20)" % (kic, repquarter))
 
 left = kepler.imshow(imgflux, cmap='YlOrRd')
 kepler.set_title('Difference')
