@@ -9,8 +9,10 @@ Features:
 --> Inbuilt methods for dealing with the odd and even Kepler CCD readout problem
 --> Option to show all plots at the end of running each script
 --> Code to visually compare Kepler pixel apertures to UKIRT (UK Infrared Telescope) images
---> !! NEW !! Difference imaging code to locate contaminant source and false positives
---> !! NEW !! Options for phasing light curves on peaks that do not have the highest amplitude in Fourier space
+--> Difference imaging code to locate contaminant source and false positives
+--> Options for phasing light curves on peaks that do not have the highest amplitude in Fourier space
+--> !! NEW !! Difference imaging displayed alongside an average image of postage stamp flux
+--> !! NEW !! Updated phase code that is no longer riddled with bugs
 
 You will need:
 --> All your Kepler llc.fits and lpd-targ.fits files in one folder
@@ -66,16 +68,11 @@ PART 3: Phasing the light curve
 --------> Prompt: Oversampling factor: (integer)
 -----------> For this, higher detail is optimal. I use an oversampling factor of 20.
 --------> Prompt: Nyquist range factor: (float)
---------> Prompt: Highest frequency to plot in microHertz: (float)
---------> This code produces two plots, the first of which is an optionally zoomed-in amplitude spectrum to show more detail. It will plot up to whichever frequency you enter here, which can be chosen based on the spectrum obtained in part 2.
 -----> If n:
 --------> Prompt: Enter folding frequency: (microHertz)
 -----------> Can be obtained manually from 2_spectrum.py
---> Prompt: Smooth or bin the phase curve? (s/b)
------> Smoothing: As in part 1, choose between boxcar and Gaussian smoothing
------> Binning: Prompt: Number of bins (integer)
 --> Prompt: Show plots now? (y/n)
------> The second plot shows the phase curve, with red points indicating the inputted number of bins, and blue points indicating one tenth that number of bins.
+-----> The plot produced shows the phase curve, binned with 1000 and 100 bins.
 
 PART 4: Analysing individual pixels
 --> Run 4_pixels.py
@@ -111,7 +108,5 @@ PART 6: Looking for possible contaminating targets within 1' of the target
 PART 7: Difference imaging
 --> Run 7_difference.py
 --> Prompt: Which quarter? (1-17)
---> For now, the code is the same as 3_phase.py, as it requires you to choose (manually or otherwise) a peak for phase folding. The code takes light curve data up to 10% either side of each maximum and minimum in the phase curve and subtracts the average of the flux around the minima from the average flux around the maxima to create the difference image.
---> Prompt: Number of bins: (integer)
------> It is best to choose this by inspection of the phase curve produced in 3_phase.py, in order to get the most accurate highest and lowest phased flux to choose maxima and minima.
+--> For now, the code is the same as 3_phase.py, as it requires you to choose (manually or otherwise) a peak for phase folding. This code uses 1000 bins. The code takes light curve data up to 10% either side of each maximum and minimum in the phase curve and subtracts the average of the flux around the minima from the average flux around the maxima to create the difference image.
 --> Prompt: Show plot now? (y/n)
