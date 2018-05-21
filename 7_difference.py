@@ -1,14 +1,19 @@
 import numpy as np
-import scipy as sp
+from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from astropy.io import fits as pyfits
 from astropy import wcs
 from astropy.convolution import convolve, Box1DKernel, Gaussian1DKernel
+from astropy.utils.exceptions import AstropyWarning
 import lomb
 import smoothing
 import translate as tr
-import os, sys
+import quarters as qs
+import nancleaner as nc
+import os, sys, warnings
+
+warnings.simplefilter('ignore', category=AstropyWarning)
 
 mpl.rc('text', usetex=True)
 mpl.rcParams['text.latex.preamble'] = [
@@ -28,33 +33,7 @@ def fft(time, flux, ofac, hifac):
    return uHzfreq, power
 
 # pick a quarter
-quarterlist = []
-
-for i in os.listdir(os.getcwd()):
-   if i.endswith("lpd-targ.fits"):
-      exec("hdulist_temp = pyfits.open('%s')" % i)
-      things1 = hdulist_temp[0].header
-      q1 = things1['QUARTER']
-      quarterlist.append(q1)
-      hdulist_temp.close()
-   else:
-      continue
-
-print ' '
-repquarter = 18 # placeholder, since there is 0 but there is no 18
-while repquarter not in quarterlist:
-   while True:
-      try:
-         repquarter = int(raw_input('--> Which quarter? (0-17) '))
-         break
-      except ValueError:
-         print '--> Please enter an integer'
-   if repquarter in quarterlist:
-      break
-   else:
-      print '--> No data for this quarter'
-      continue
-print ' '
+repquarter = qs.getquarter()
 
 # grab the quarter
 for i in os.listdir(os.getcwd()):
@@ -92,6 +71,8 @@ else:
 
 dim = len(flux1)
 nans = []
+
+# fluxnew = np.zeros((dim, y, x))
 
 for i in range(dim):
    # fluxnew[i,:] = flux1[i,:]
@@ -155,45 +136,35 @@ tohz = foldfreq * 1e-6
 tos = 1/tohz
 foldper = tos/86400
 
-binnum = 100
-binnum2 = 1000
+binnum = 1000
 binsize = foldper / binnum
-binsize2 = foldper / binnum2
 
 phasedtimearray = np.zeros(len(times))
 finalampls = np.zeros(binnum)
 amplcounts = np.zeros(binnum)
-finalampls2 = np.zeros(binnum2)
-amplcounts2 = np.zeros(binnum2)
 
 for i, val in enumerate(times):
    phasedtime = val % foldper
    newphasedtime = tr.translate(phasedtime, 0, foldper, 0, 1)
    phasedtimearray[i] = newphasedtime
-   bindex = (phasedtime - (phasedtime % binsize)) / binsize - 1
+   bindex = int((phasedtime - (phasedtime % binsize)) / binsize - 1)
    finalampls[bindex] += ampls[i]
    amplcounts[bindex] += 1
-   bindex2 = (phasedtime - (phasedtime % binsize2)) / binsize2 - 1
-   finalampls2[bindex2] += ampls[i]
-   amplcounts2[bindex2] += 1
    
 finalampls = np.divide(finalampls, amplcounts)
-finalampls2 = np.divide(finalampls2, amplcounts2)
 
 finaltimes = np.histogram(phasedtimearray, bins=binnum-1, range=(0,1))
-finaltimes2 = np.histogram(phasedtimearray, bins=binnum2-1, range=(0,1))
 
 nanlist = []
 for i, val in enumerate(finalampls):
    if np.isnan(val) == True:
       nanlist.append(i)
 
-phasetime = np.delete(finaltimes, nanlist)
+phasetime = np.delete(finaltimes[1], nanlist)
 phaseflux = np.delete(finalampls, nanlist)
 
-maxpos = np.argmax(phaseflux) / np.float64(len(phasetime[1]))
-minpos = np.argmin(phaseflux) / np.float64(len(phasetime[1]))
-
+maxpos = np.argmax(phaseflux) / np.float64(len(phasetime))
+minpos = np.argmin(phaseflux) / np.float64(len(phasetime))
 
 # folding the pixel fluxes
 time1 = time1 % foldper
@@ -205,25 +176,39 @@ timeflags = np.zeros(len(time1))
 tolerance = 0.05
 
 for i, time in enumerate(time1):
-   if time < maxpos + tolerance and time > maxpos - tolerance:
-      timeflags[i] = 1
-   elif time < minpos + tolerance and time > minpos - tolerance:
-      timeflags[i] = -1
+   if minpos - tolerance <= 0:
+      if time < minpos + tolerance or time > (minpos - tolerance)%1:
+         timeflags[i] = -1
+   elif maxpos + tolerance >= 1:
+      if time < (minpos + tolerance)%1 or time > minpos - tolerance:
+         timeflags[i] = -1
+   else:
+      if time < minpos + tolerance and time > minpos - tolerance:
+         timeflags[i] = -1
 
-# print max(timeflags), min(timeflags)
+   if maxpos - tolerance <= 0:
+      if time < maxpos + tolerance or time > (maxpos - tolerance)%1:
+         timeflags[i] = 1
+   elif maxpos + tolerance >= 1:
+      if time < (maxpos + tolerance)%1 or time > maxpos - tolerance:
+         timeflags[i] = 1
+   else:
+      if time < maxpos + tolerance and time > maxpos - tolerance:
+         timeflags[i] = 1
 
+# establish number of frames to be used around the maxima and minima
 highflags = np.where(timeflags>0)[0]
 lowflags = np.where(timeflags<0)[0]
 highdim = len(highflags)
 lowdim = len(lowflags)
-highnans = []
-lownans = []
 
+# 3d flux arrays to fill with frames
 fluxhigh = np.zeros((highdim, y, x))
 fluxlow = np.zeros((lowdim, y, x))
 
-# print np.shape(fluxhigh), np.shape(fluxlow)
-
+# get rid of nans
+highnans = []
+lownans = []
 for i in range(highdim):
    fluxhigh[i,:] = flux1[highflags[i]]
    if np.isnan(fluxhigh[i,:]).all() == True:
@@ -235,7 +220,6 @@ for i in range(lowdim):
 
 fluxhigh1 = np.delete(fluxhigh, highnans, axis=0)
 fluxlow1 = np.delete(fluxlow, lownans, axis=0)
-# print fluxhigh, fluxlow
 
 fluxdiff = np.abs(np.average(fluxhigh1, axis=0) - np.average(fluxlow1, axis=0))
 
@@ -253,54 +237,9 @@ if eo == 0:
 
 plt.figure(1)
 
-# pic = plt.imshow(imgflux, cmap='pink')
-# exec("plt.title('%d q%d', fontsize=20)" % (kic, repquarter))
-# pic.set_interpolation('nearest')
-# plt.xlim(-0.5, x-0.5)
-# plt.ylim(y-0.5, -0.5)
-
-# pic.axes.get_xaxis().set_ticklabels([])
-# pic.axes.get_yaxis().set_ticklabels([])
-# pic.axes.get_xaxis().set_ticks([])
-# pic.axes.get_yaxis().set_ticks([])
-
-# crval = w.wcs.crval
-# north = crval + np.array([0, 6/3600.])
-# east = crval + np.array([ 6/3600., 0])
-
-# ncoords = np.vstack([crval, north])
-# ecoords = np.vstack([crval, east])
-# npixels = w.wcs_world2pix(ncoords , 0)
-# epixels = w.wcs_world2pix(ecoords , 0)
-# npixels[1, 1] = npixels[0, 1] - (npixels[1, 1] - npixels[0, 1]) # flip ud
-# epixels[1, 1] = epixels[0, 1] - (epixels[1, 1] - epixels[0, 1])
-# if eo == 0:
-#    npixels[1, 0] = npixels[0, 0] - (npixels[1, 0] - npixels[0, 0]) # flip lr
-#    epixels[1, 0] = epixels[0, 0] - (epixels[1, 0] - epixels[0, 0])
-# plt.plot(npixels[:,0], npixels[:,1], color='#00ff8c')
-# plt.plot(epixels[:,0], epixels[:,1], '--', color='#00ff8c')
-
-# if eo == 1:
-#    plt.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#00ff8c', ms=10)
-# elif eo == 0:
-#    plt.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#00ff8c', ms=10)
-
-# exec("plt.savefig('kic%dq%ddifferenceimg.eps')" % (kic, repquarter))
-
-fig, (ukirt, kepler) = plt.subplots(1, 2) 
+fig, (avgimg, diffimg) = plt.subplots(1, 2) 
 
 # exec("fig.suptitle('%d q%d', fontsize=20)" % (kic, repquarter))
-
-left = kepler.imshow(imgflux, cmap='YlOrRd')
-kepler.set_title('Difference')
-left.set_interpolation('nearest')
-kepler.set_xlim(-0.5, x-0.5)
-kepler.set_ylim(y-0.5, -0.5)
-
-left.axes.get_xaxis().set_ticklabels([])
-left.axes.get_yaxis().set_ticklabels([])
-left.axes.get_xaxis().set_ticks([])
-left.axes.get_yaxis().set_ticks([])
 
 crval = w.wcs.crval
 north = crval + np.array([0, 6/3600.])
@@ -315,32 +254,46 @@ epixels[1, 1] = epixels[0, 1] - (epixels[1, 1] - epixels[0, 1])
 if eo == 0:
    npixels[1, 0] = npixels[0, 0] - (npixels[1, 0] - npixels[0, 0]) # flip lr
    epixels[1, 0] = epixels[0, 0] - (epixels[1, 0] - epixels[0, 0])
-kepler.plot(npixels[:,0], npixels[:,1], color='#0cb5ed')
-kepler.plot(epixels[:,0], epixels[:,1], '--', color='#0cb5ed')
+diffimg.plot(npixels[:,0], npixels[:,1], color='#0cb5ed')
+diffimg.plot(epixels[:,0], epixels[:,1], '--', color='#0cb5ed')
 
-if eo == 1:
-   kepler.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
-   ukirt.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
-elif eo == 0:
-   kepler.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
-   ukirt.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
+left = avgimg.imshow(avgflux, cmap='YlOrRd')
+avgimg.set_title('Average')
+left.set_interpolation('nearest')
+avgimg.set_xlim(-0.5, x-0.5)
+avgimg.set_ylim(y-0.5, -0.5)
+avgimg.plot(npixels[:,0], npixels[:,1], color='#0cb5ed')
+avgimg.plot(epixels[:,0], epixels[:,1], '--', color='#0cb5ed')
+cbar = fig.colorbar(left, ax=avgimg)
 
-right = ukirt.imshow(avgflux, cmap='YlOrRd')
-ukirt.set_title('Average')
+left.axes.get_xaxis().set_ticklabels([])
+left.axes.get_yaxis().set_ticklabels([])
+left.axes.get_xaxis().set_ticks([])
+left.axes.get_yaxis().set_ticks([])
+
+avgimg.plot([25, 25], [25, 55], '-', color='#0cb5ed')
+avgimg.plot([25, 55], [25, 25], '--', color='#0cb5ed')
+
+right = diffimg.imshow(imgflux, cmap='YlOrRd')
+diffimg.set_title('Difference')
 right.set_interpolation('nearest')
-ukirt.set_xlim(-0.5, x-0.5)
-ukirt.set_ylim(y-0.5, -0.5)
-ukirt.plot(npixels[:,0], npixels[:,1], color='#0cb5ed')
-ukirt.plot(epixels[:,0], epixels[:,1], '--', color='#0cb5ed')
+diffimg.set_xlim(-0.5, x-0.5)
+diffimg.set_ylim(y-0.5, -0.5)
+cbar2 = fig.colorbar(right, ax=diffimg)
 
 right.axes.get_xaxis().set_ticklabels([])
 right.axes.get_yaxis().set_ticklabels([])
 right.axes.get_xaxis().set_ticks([])
 right.axes.get_yaxis().set_ticks([])
 
-ukirt.plot([25, 25], [25, 55], '-', color='#0cb5ed')
-ukirt.plot([25, 55], [25, 25], '--', color='#0cb5ed')
+if eo == 1:
+   diffimg.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
+   avgimg.plot((x - refx) - 0.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
+elif eo == 0:
+   diffimg.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
+   avgimg.plot(refx - 1.5, (y - refy) - 0.5, '*', color='#0cb5ed', ms=10)
 
+plt.tight_layout()
 fig.set_size_inches(7.5, 4.5)
 exec("plt.savefig('kic%dq%dimgs.png')" % (kic, repquarter))
 
