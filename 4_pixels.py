@@ -163,7 +163,7 @@ print ' '
 
 # dynamic variable names
 for (j, k), img in np.ndenumerate(temp2d):
-   index = (k + 1) * j + (x - j) * k
+   index = np.ravel_multi_index((j,k),table2.shape)
    exec("pixel%d_flux = np.array(None)" % index)
    exec("pixel%d_time = np.array(None)" % index)
 
@@ -182,7 +182,7 @@ while exp != "y" and exp != "n":
 print ' '
 
 for (j, k), img in np.ndenumerate(table2):
-   index = (j + 1) * k + (x - k) * j
+   index = np.ravel_multi_index((j,k),table2.shape)
    if img == 0:
       pass
    else:
@@ -270,7 +270,7 @@ plt.xlabel('Time (d)')
 plt.ylabel('Fractional Intensity')
 
 for (j, k), img in np.ndenumerate(table2):
-   index = (j + 1) * k + (x - k) * j
+   index = np.ravel_multi_index((j,k),table2.shape)
    if img == 0:
       if eo == 0:
          ax = fig.add_subplot(gs[y - j - 1, x - k - 1])
@@ -306,7 +306,7 @@ plt.xlabel('Frequency ($\mu$Hz)')
 plt.ylabel('Amplitude (ppm)')
 
 for (j, k), img in np.ndenumerate(table2):
-   index = (j + 1) * k + (x - k) * j
+   index = np.ravel_multi_index((j,k),table2.shape)
    if img == 0:
       if eo == 0:
          ax = fig.add_subplot(gs[y - j - 1, x - k - 1])
